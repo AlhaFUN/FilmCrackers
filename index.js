@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const fs = require('fs');
+const express = require('express');
 
 const client = new Client({
   intents: [
@@ -28,63 +29,59 @@ client.on('ready', () => {
 });
 
 client.on('messageCreate', async (message) => {
-  // Commands only for admins
-  if (
-    message.content.startsWith('!autoreact') &&
-    message.member.permissions.has('Administrator')
-  ) {
-    // DM command (admin only)
-if (
-  message.content.startsWith('!dm') &&
-  message.member.permissions.has('Administrator')
-) {
-  const args = message.content.trim().split(' ').slice(1);
-  const userId = args.shift(); // first argument = user ID
-  const dmMessage = args.join(' '); // rest = message
+  // ADMIN-ONLY COMMANDS
+  if (message.member?.permissions.has('Administrator')) {
+    const args = message.content.trim().split(/\s+/);
 
-  if (!userId || !dmMessage) {
-    return message.reply('⚠️ Usage: `!dm <userID> <your message>`');
-  }
-
-  try {
-    const user = await client.users.fetch(userId);
-    await user.send(dmMessage);
-    message.reply(`✅ Message sent to <@${userId}>.`);
-  } catch (err) {
-    console.error(err);
-    message.reply(`❌ Failed to send DM. Check the user ID and bot permissions.`);
-  }
-  return;
-}
-
-    const args = message.content.trim().split(/\s+/).slice(1);
-    const sub = args[0];
-
-    if (sub === 'enable') {
-      settings.enabled = true;
-      settings.channelId = message.channel.id;
-      message.reply(`✅ Auto-react enabled in this channel!`);
-    } else if (sub === 'disable') {
-      settings.enabled = false;
-      message.reply(`❌ Auto-react disabled.`);
-    } else if (sub === 'setemojis') {
-      if (args.length < 3)
-        return message.reply('⚠️ Usage: `!autoreact setemojis 😄 👎`');
-      settings.emojis = [args[1], args[2]];
-      message.reply(`✅ Emojis updated to ${args[1]} and ${args[2]}`);
-    } else {
-      message.reply(
-        `ℹ️ Commands:
+    // ===== !autoreact =====
+    if (args[0] === '!autoreact') {
+      const sub = args[1];
+      if (sub === 'enable') {
+        settings.enabled = true;
+        settings.channelId = message.channel.id;
+        message.reply(`✅ Auto-react enabled in this channel!`);
+      } else if (sub === 'disable') {
+        settings.enabled = false;
+        message.reply(`❌ Auto-react disabled.`);
+      } else if (sub === 'setemojis') {
+        if (args.length < 4)
+          return message.reply('⚠️ Usage: `!autoreact setemojis 😄 👎`');
+        settings.emojis = [args[2], args[3]];
+        message.reply(`✅ Emojis updated to ${args[2]} and ${args[3]}`);
+      } else {
+        message.reply(
+          `ℹ️ Commands:
 \`!autoreact enable\` – Enable in this channel
 \`!autoreact disable\` – Disable
 \`!autoreact setemojis 😀 😡\` – Set custom emojis`
-      );
+        );
+      }
+      fs.writeFileSync('settings.json', JSON.stringify(settings, null, 2));
+      return;
     }
-    fs.writeFileSync('settings.json', JSON.stringify(settings, null, 2));
-    return;
+
+    // ===== !dm =====
+    if (args[0] === '!dm') {
+      const userId = args[1];
+      const dmMessage = args.slice(2).join(' ');
+
+      if (!userId || !dmMessage) {
+        return message.reply('⚠️ Usage: `!dm <userID> <your message>`');
+      }
+
+      try {
+        const user = await client.users.fetch(userId);
+        await user.send(dmMessage);
+        message.reply(`✅ DM sent to <@${userId}>.`);
+      } catch (err) {
+        console.error(`❌ Failed to DM ${userId}`, err);
+        message.reply(`❌ Failed to send DM. Make sure the user ID is correct and the user allows DMs.`);
+      }
+      return;
+    }
   }
 
-  // React to messages if enabled and in the right channel
+  // ===== Auto-Reaction =====
   if (
     settings.enabled &&
     message.channel.id === settings.channelId &&
@@ -102,8 +99,7 @@ if (
 
 client.login(process.env.TOKEN);
 
-// Keep-render-alive code
-const express = require('express');
+// Keep-render-alive server
 const app = express();
 app.get('/', (_req, res) => res.send('OK'));
 const PORT = process.env.PORT || 10000;
