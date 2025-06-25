@@ -77,3 +77,10 @@ client.on('messageCreate', async (message) => {
 });
 
 client.login(process.env.TOKEN);
+
+// Keep-render-alive code
+const express = require('express');
+const app = express();
+app.get('/', (_req, res) => res.send('OK'));
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`Ping server listening on port ${PORT}`));
