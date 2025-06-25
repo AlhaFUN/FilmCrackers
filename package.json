@@ -12,6 +12,7 @@
   "type": "commonjs",
   "dependencies": {
     "discord.js": "^14.20.0",
-    "dotenv": "^16.5.0"
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0"
   }
 }
