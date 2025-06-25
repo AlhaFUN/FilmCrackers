@@ -33,6 +33,30 @@ client.on('messageCreate', async (message) => {
     message.content.startsWith('!autoreact') &&
     message.member.permissions.has('Administrator')
   ) {
+    // DM command (admin only)
+if (
+  message.content.startsWith('!dm') &&
+  message.member.permissions.has('Administrator')
+) {
+  const args = message.content.trim().split(' ').slice(1);
+  const userId = args.shift(); // first argument = user ID
+  const dmMessage = args.join(' '); // rest = message
+
+  if (!userId || !dmMessage) {
+    return message.reply('⚠️ Usage: `!dm <userID> <your message>`');
+  }
+
+  try {
+    const user = await client.users.fetch(userId);
+    await user.send(dmMessage);
+    message.reply(`✅ Message sent to <@${userId}>.`);
+  } catch (err) {
+    console.error(err);
+    message.reply(`❌ Failed to send DM. Check the user ID and bot permissions.`);
+  }
+  return;
+}
+
     const args = message.content.trim().split(/\s+/).slice(1);
     const sub = args[0];
 
