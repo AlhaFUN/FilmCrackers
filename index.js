@@ -85,7 +85,7 @@ client.on('messageCreate', async (message) => {
   if (
     settings.enabled &&
     message.channel.id === settings.channelId &&
-    !message.author.bot
+    (!message.author.bot || message.webhookId) // 👈 THIS is the fix
   ) {
     for (const emoji of settings.emojis) {
       try {
