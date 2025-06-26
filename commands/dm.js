@@ -1,14 +1,18 @@
+// /commands/dm.js
+const { log } = require('../utils/logger');
+
 module.exports = async (message, args, client) => {
   const userId = args[1];
   const dmMessage = args.slice(2).join(' ');
 
   if (!userId || !dmMessage) {
-    return message.reply('⚠️ Usage: `!dm <userID> <your message>`');
+    return message.reply('⚠️ Usage: `!!dm <userID> <your message>`');
   }
 
   try {
     const user = await client.users.fetch(userId);
     await user.send(dmMessage);
+    log(`[COMMAND] ${message.author.tag} sent a DM to user ${userId}.`);
     return message.reply(`✅ DM sent to <@${userId}>.`);
   } catch (err) {
     console.error(`❌ Failed to DM ${userId}`, err);
