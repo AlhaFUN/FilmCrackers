@@ -1,21 +1,25 @@
+// /commands/status.js
+const { EmbedBuilder } = require('discord.js');
 const { log } = require('../utils/logger');
 
-module.exports = {
-  name: 'status',
-  description: 'Shows the current status of all bot systems and ping.',
-  async execute(message, args, client, settings) {
-    const ping = Math.round(client.ws.ping);
-    const embed = {
-      color: 0x00ff00,
-      title: '📊 Bot Status',
-      fields: [
-        { name: 'AutoReact', value: settings.enabled ? '✅ Enabled' : '❌ Disabled', inline: true },
-        { name: 'AutoReact Channel', value: `<#${settings.channelId || 'N/A'}>`, inline: true },
-        { name: 'Current Emojis', value: settings.emojis.join(' '), inline: true },
-        { name: 'Bot Ping', value: `${ping}ms`, inline: true }
-      ]
-    };
-    await message.reply({ embeds: [embed] });
-    log(`${message.author.tag} checked bot status.`);
-  }
+// We now export the function directly.
+module.exports = async (message, settings, client) => {
+  const ping = client.ws.ping;
+  const autoreactStatus = settings.enabled
+    ? `✅ Enabled in <#${settings.channelId}>`
+    : '❌ Disabled';
+
+  const statusEmbed = new EmbedBuilder()
+    .setColor('#0099ff')
+    .setTitle('🤖 Bot Status & Health')
+    .addFields(
+      { name: 'Ping', value: `**${ping}ms**`, inline: true },
+      { name: 'Auto-Reactions', value: autoreactStatus, inline: true },
+      { name: 'Current Emojis', value: settings.emojis.join(' '), inline: true }
+    )
+    .setFooter({ text: 'FilmCrackers Bot | All systems operational.' })
+    .setTimestamp();
+
+  await message.reply({ embeds: [statusEmbed] });
+  log(`[COMMAND] ${message.author.tag} used !status.`);
 };

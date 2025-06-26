@@ -1,16 +1,30 @@
+// /commands/help.js
+const { EmbedBuilder } = require('discord.js');
+const { log } = require('../utils/logger');
+
+// We now export the function directly.
 module.exports = async (message) => {
-  const helpMessage = `
-**🛠️ Available Commands:**
+  const helpEmbed = new EmbedBuilder()
+    .setColor('#f1c40f')
+    .setTitle('❓ Help & Commands')
+    .setDescription('Here are all the commands you can use:')
+    .addFields(
+      {
+        name: '👑 Admin Commands',
+        value:
+          '`!autoreact enable` - Activates auto-reactions in the current channel.\n' +
+          '`!autoreact disable` - Deactivates auto-reactions.\n' +
+          '`!autoreact setemojis 😀 😡` - Sets the two emojis for reactions.\n' +
+          '`!dm <userID> <message>` - Sends a direct message to a user.',
+      },
+      {
+        name: '🌍 Global Commands',
+        value:
+          '`!status` - Shows the current status of the bot and its systems.\n' +
+          '`!help` - Displays this help message.',
+      }
+    );
 
-**Admin Only:**
-\`!autoreact enable\` — Enable auto-react in this channel  
-\`!autoreact disable\` — Disable auto-react  
-\`!autoreact setemojis 😀 😡\` — Set custom emojis  
-\`!dm <userId> <message>\` — Send a DM to a user
-
-**Everyone:**
-\`!status\` — Check the status of auto-react system and bot  
-\`!help\` — Display this help message
-  `;
-  await message.channel.send(helpMessage);
+  await message.reply({ embeds: [helpEmbed] });
+  log(`[COMMAND] ${message.author.tag} used !help.`);
 };
