@@ -2,6 +2,7 @@ require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const express = require('express');
 const { getSettings, saveSettings } = require('./utils/settings');
+// THIS IS THE FIX: We destructure the imported object to get the functions.
 const { log, initializeLogger } = require('./utils/logger');
 
 const client = new Client({
@@ -19,6 +20,7 @@ client.once('ready', async () => {
       settings = { enabled: false, channelId: null, emojis: ['🔥', '💯'] };
       await saveSettings(settings);
     }
+    // Now this call will work correctly.
     initializeLogger(client);
     log(`✅ Bot logged in as ${client.user.tag}. Ready to go!`);
   } catch (error) {
@@ -58,13 +60,10 @@ client.on('messageCreate', async (message) => {
     const handleHelp = require('./commands/help');
     return await handleHelp(message);
   }
-
-  // ============== NEW COMMAND ADDED HERE ==============
   if (command === '!!info') {
     const handleInfo = require('./commands/info');
     return await handleInfo(message, args);
   }
-  // ====================================================
 
   // --- Auto-Reaction Logic ---
   if (
