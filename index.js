@@ -1,4 +1,3 @@
-// index.js
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const express = require('express');
@@ -59,6 +58,13 @@ client.on('messageCreate', async (message) => {
     const handleHelp = require('./commands/help');
     return await handleHelp(message);
   }
+
+  // ============== NEW COMMAND ADDED HERE ==============
+  if (command === '!!info') {
+    const handleInfo = require('./commands/info');
+    return await handleInfo(message, args);
+  }
+  // ====================================================
 
   // --- Auto-Reaction Logic ---
   if (
