@@ -2,25 +2,28 @@ require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const express = require('express');
 const { getSettings, saveSettings } = require('./utils/settings');
-// THIS IS THE FIX: We destructure the imported object to get the functions.
 const { log, initializeLogger } = require('./utils/logger');
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
 
+// This is where the settings are stored in memory. It starts as null.
 let settings = null;
 
 // Bot startup
 client.once('ready', async () => {
   try {
+    // This is the first thing we do: load settings from the database.
     settings = await getSettings();
+    
+    // If the database is empty or new, create default settings.
     if (!settings) {
       log('⚠️ No settings found in database. Creating default settings.');
       settings = { enabled: false, channelId: null, emojis: ['🔥', '💯'] };
       await saveSettings(settings);
     }
-    // Now this call will work correctly.
+
     initializeLogger(client);
     log(`✅ Bot logged in as ${client.user.tag}. Ready to go!`);
   } catch (error) {
@@ -30,13 +33,16 @@ client.once('ready', async () => {
 
 // Message handler
 client.on('messageCreate', async (message) => {
+  // ============================ THE FIX IS HERE ============================
+  // This line prevents the bot from doing ANYTHING until the `settings`
+  // variable has been loaded during the 'ready' event. This solves the race condition.
   if (!settings || !message.guild || message.author.bot) return;
+  // =======================================================================
 
-  // We only care about messages that start with the new prefix
   if (!message.content.startsWith('!!')) return;
 
   const args = message.content.trim().split(/\s+/);
-  const command = args[0].toLowerCase(); // e.g., '!!help'
+  const command = args[0].toLowerCase();
 
   // --- Command Router ---
   // Admin Commands
