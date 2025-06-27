@@ -1,3 +1,4 @@
+// index.js (Complete and Corrected)
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const express = require('express');
@@ -8,22 +9,16 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
 
-// This is where the settings are stored in memory. It starts as null.
 let settings = null;
 
-// Bot startup
 client.once('ready', async () => {
   try {
-    // This is the first thing we do: load settings from the database.
     settings = await getSettings();
-    
-    // If the database is empty or new, create default settings.
     if (!settings) {
       log('⚠️ No settings found in database. Creating default settings.');
       settings = { enabled: false, channelId: null, emojis: ['🔥', '💯'] };
       await saveSettings(settings);
     }
-
     initializeLogger(client);
     log(`✅ Bot logged in as ${client.user.tag}. Ready to go!`);
   } catch (error) {
@@ -31,25 +26,41 @@ client.once('ready', async () => {
   }
 });
 
-// Message handler
 client.on('messageCreate', async (message) => {
-  // ============================ THE FIX IS HERE ============================
-  // This line prevents the bot from doing ANYTHING until the `settings`
-  // variable has been loaded during the 'ready' event. This solves the race condition.
   if (!settings || !message.guild || message.author.bot) return;
-  // =======================================================================
 
-  if (!message.content.startsWith('!!')) return;
+  const isCommand = message.content.startsWith('!!');
 
+  // --- Auto-Reaction Logic ---
+  // We check this BEFORE commands to react even if a command is not run.
+  if (!isCommand) {
+    if (
+      settings.enabled &&
+      message.channel.id === settings.channelId
+    ) {
+      // BOMB-PROOF DEBUGGING: This log will tell us if it's even trying to react.
+      log(`Attempting to react in #${message.channel.name}. Enabled: ${settings.enabled}, Channel Match: ${message.channel.id === settings.channelId}`);
+      for (const emoji of settings.emojis) {
+        try {
+          await message.react(emoji);
+        } catch (err) {
+          log(`❌ Failed to react with ${emoji}. Error: ${err.message}`);
+        }
+      }
+    }
+    return; // Stop processing if it's not a command
+  }
+
+  // --- Command Processing ---
   const args = message.content.trim().split(/\s+/);
   const command = args[0].toLowerCase();
 
-  // --- Command Router ---
-  // Admin Commands
   if (message.member?.permissions.has('Administrator')) {
     if (command === '!!autoreact') {
       const handleAutoreact = require('./commands/autoreact');
-      return await handleAutoreact(message, args, settings, saveSettings);
+      // THIS IS THE FIX: We update the local settings with the result from the command.
+      settings = await handleAutoreact(message, args, settings, saveSettings);
+      return;
     }
     if (command === '!!dm') {
       const handleDM = require('./commands/dm');
@@ -70,27 +81,10 @@ client.on('messageCreate', async (message) => {
     const handleInfo = require('./commands/info');
     return await handleInfo(message, args);
   }
-
-  // --- Auto-Reaction Logic ---
-  if (
-    settings.enabled &&
-    message.channel.id === settings.channelId &&
-    (!message.author.bot || message.webhookId)
-  ) {
-    for (const emoji of settings.emojis) {
-      try {
-        await message.react(emoji);
-      } catch (err) {
-        log(`❌ Failed to react with ${emoji} in #${message.channel.name}. Error: ${err.message}`);
-      }
-    }
-  }
 });
 
-// Login to Discord
 client.login(process.env.TOKEN);
 
-// Keep-alive server for Render
 const app = express();
 app.get('/', (_req, res) => res.send('OK'));
 app.listen(process.env.PORT || 10000, () => console.log('🌐 Ping server running.'));
