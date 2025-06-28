@@ -1,4 +1,4 @@
-// index.js (Complete and Corrected)
+// index.js (Cleaner Version)
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const express = require('express');
@@ -27,38 +27,35 @@ client.once('ready', async () => {
 });
 
 client.on('messageCreate', async (message) => {
-  if (!settings || !message.guild || message.author.bot) return;
-
-  const isCommand = message.content.startsWith('!!');
+  if (!settings || !message.guild) return;
 
   // --- Auto-Reaction Logic ---
-  // We check this BEFORE commands to react even if a command is not run.
-  if (!isCommand) {
-    if (
-      settings.enabled &&
-      message.channel.id === settings.channelId
-    ) {
-      // BOMB-PROOF DEBUGGING: This log will tell us if it's even trying to react.
-      log(`Attempting to react in #${message.channel.name}. Enabled: ${settings.enabled}, Channel Match: ${message.channel.id === settings.channelId}`);
-      for (const emoji of settings.emojis) {
-        try {
-          await message.react(emoji);
-        } catch (err) {
-          log(`❌ Failed to react with ${emoji}. Error: ${err.message}`);
-        }
+  // This now runs for EVERY message, including bots, commands, and webhooks.
+  if (
+    settings.enabled &&
+    message.channel.id === settings.channelId &&
+    (!message.author.bot || message.webhookId) // The crucial check
+  ) {
+    log(`Attempting to react in #${message.channel.name}. User: ${message.author.tag}, Is Webhook: ${!!message.webhookId}`);
+    for (const emoji of settings.emojis) {
+      try {
+        await message.react(emoji);
+      } catch (err) {
+        log(`❌ Failed to react with ${emoji}. Error: ${err.message}`);
       }
     }
-    return; // Stop processing if it's not a command
   }
 
   // --- Command Processing ---
+  // We check separately if the message is a command from a non-bot user.
+  if (message.author.bot || !message.content.startsWith('!!')) return;
+
   const args = message.content.trim().split(/\s+/);
   const command = args[0].toLowerCase();
 
   if (message.member?.permissions.has('Administrator')) {
     if (command === '!!autoreact') {
       const handleAutoreact = require('./commands/autoreact');
-      // THIS IS THE FIX: We update the local settings with the result from the command.
       settings = await handleAutoreact(message, args, settings, saveSettings);
       return;
     }
