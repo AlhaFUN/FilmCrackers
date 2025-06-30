@@ -41,45 +41,51 @@ client.on(Events.ThreadCreate, async (thread) => {
   else { await thread.send(result); }
 });
 
-// ============================ THE FIX IS HERE ============================
-// --- EVENT: A new ticket channel is created (REWORKED) ---
+// ============================ THE REAL FIX IS HERE ============================
+// --- EVENT: A new ticket channel is created (REWORKED AGAIN) ---
 client.on(Events.ChannelCreate, async (channel) => {
-  // 1. Check if it's a valid ticket channel
   if (!ticketCategoryId || channel.parentId !== ticketCategoryId || channel.type !== ChannelType.GuildText) {
     return;
   }
   
-  log(`New ticket channel #${channel.name} created. Actively searching for ticket embed...`);
+  log(`New ticket channel #${channel.name} detected. Waiting 3 seconds before searching...`);
+
+  // 1. ADD A DELAY - As you requested, we wait 3 seconds.
+  await new Promise(resolve => setTimeout(resolve, 3000));
 
   try {
-    // 2. Proactively fetch the last 10 messages from the new channel's history.
     const messages = await channel.messages.fetch({ limit: 10 });
+    let embedFound = false;
 
-    // 3. Loop through the fetched messages to find the one we need.
     for (const message of messages.values()) {
       if (message.author.id === ticketsBotId && message.embeds.length > 0) {
         const embed = message.embeds[0];
-        const movieNameField = embed.fields.find(field => field.name === 'Movie Name');
         
-        if (movieNameField && movieNameField.value) {
-          // 4. We found it! Process it and then stop.
-          const movieName = movieNameField.value;
-          log(`Found "Movie Name" in #${channel.name}: "${movieName}". Processing...`);
+        // 2. Check for EITHER "Movie Name" or "Series Name".
+        const mediaNameField = embed.fields.find(
+          field => field.name === 'Movie Name' || field.name === 'Series Name'
+        );
+        
+        if (mediaNameField && mediaNameField.value) {
+          embedFound = true;
+          const mediaName = mediaNameField.value;
+          log(`Found media name in #${channel.name}: "${mediaName}" (Field: "${mediaNameField.name}")`);
           
-          const result = await fetchMediaInfo(movieName);
+          const result = await fetchMediaInfo(mediaName);
           if (result.error) {
             await channel.send(`> **Auto-Info:** ${result.error}`);
           } else {
-            await channel.send({ content: `> **Auto-Info for "${movieName}":**`, ...result });
+            await channel.send({ content: `> **Auto-Info for "${mediaName}":**`, ...result });
           }
-          // Exit the function since our job is done.
-          return;
+          // Break the loop since we found what we needed.
+          break;
         }
       }
     }
     
-    // 5. If the loop finishes and we found nothing, log it.
-    log(`Could not find a valid ticket embed in the initial messages of #${channel.name}.`);
+    if (!embedFound) {
+      log(`Could not find a valid ticket embed in the initial messages of #${channel.name} after waiting.`);
+    }
 
   } catch (err) {
     log(`Error fetching message history for #${channel.name}: ${err.message}`);
