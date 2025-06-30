@@ -14,6 +14,9 @@ const monitoredForumChannels = process.env.FORUM_CHANNEL_IDS?.split(',') || [];
 const ticketCategoryId = process.env.TICKET_CATEGORY_ID;
 const ticketsBotId = '1325579039888511056';
 
+// This Set will temporarily store the IDs of new ticket channels we need to watch.
+const ticketsToWatch = new Set();
+
 client.once('ready', async () => {
   try {
     settings = await getSettings();
@@ -42,62 +45,50 @@ client.on(Events.ThreadCreate, async (thread) => {
 });
 
 // ============================ THE REAL FIX IS HERE ============================
-// --- EVENT: A new ticket channel is created (REWORKED AGAIN) ---
+// -- EVENT: A new ticket channel is created (SENTRY) --
 client.on(Events.ChannelCreate, async (channel) => {
-  if (!ticketCategoryId || channel.parentId !== ticketCategoryId || channel.type !== ChannelType.GuildText) {
-    return;
-  }
+  if (!ticketCategoryId || channel.parentId !== ticketCategoryId || channel.type !== ChannelType.GuildText) return;
   
-  log(`New ticket channel #${channel.name} detected. Waiting 3 seconds before searching...`);
+  log(`New ticket channel #${channel.name} created. Adding to watchlist.`);
+  ticketsToWatch.add(channel.id);
 
-  // 1. ADD A DELAY - As you requested, we wait 3 seconds.
-  await new Promise(resolve => setTimeout(resolve, 3000));
-
-  try {
-    const messages = await channel.messages.fetch({ limit: 10 });
-    let embedFound = false;
-
-    for (const message of messages.values()) {
-      if (message.author.id === ticketsBotId && message.embeds.length > 0) {
-        const embed = message.embeds[0];
-        
-        // 2. Check for EITHER "Movie Name" or "Series Name".
-        const mediaNameField = embed.fields.find(
-          field => field.name === 'Movie Name' || field.name === 'Series Name'
-        );
-        
-        if (mediaNameField && mediaNameField.value) {
-          embedFound = true;
-          const mediaName = mediaNameField.value;
-          log(`Found media name in #${channel.name}: "${mediaName}" (Field: "${mediaNameField.name}")`);
-          
-          const result = await fetchMediaInfo(mediaName);
-          if (result.error) {
-            await channel.send(`> **Auto-Info:** ${result.error}`);
-          } else {
-            await channel.send({ content: `> **Auto-Info for "${mediaName}":**`, ...result });
-          }
-          // Break the loop since we found what we needed.
-          break;
-        }
-      }
+  // Set a timeout to remove the channel from the watch list after 5 minutes to prevent memory leaks
+  setTimeout(() => {
+    if (ticketsToWatch.has(channel.id)) {
+      log(`Watchlist timeout for #${channel.name}. Removing.`);
+      ticketsToWatch.delete(channel.id);
     }
-    
-    if (!embedFound) {
-      log(`Could not find a valid ticket embed in the initial messages of #${channel.name} after waiting.`);
-    }
-
-  } catch (err) {
-    log(`Error fetching message history for #${channel.name}: ${err.message}`);
-  }
+  }, 300000); // 5 minutes
 });
-// =======================================================================
-
 
 client.on('messageCreate', async (message) => {
   if (!settings || !message.guild) return;
 
-  // --- Auto-Reaction Logic ---
+  // -- PRIORITY 1: Ticket Embed Processing (HUNTER) --
+  // This runs for every message, but only acts if the channel is on our watchlist.
+  if (ticketsToWatch.has(message.channel.id) && message.author.id === ticketsBotId && message.embeds.length > 0) {
+    const embed = message.embeds[0];
+    const mediaNameField = embed.fields.find(
+      field => field.name === 'Movie Name' || field.name === 'Series Name'
+    );
+    
+    if (mediaNameField && mediaNameField.value) {
+      const movieName = mediaNameField.value;
+      log(`Found media name in #${message.channel.name}: "${movieName}". Processing...`);
+      
+      // We found the embed. Remove it from the watchlist so we don't process it again.
+      ticketsToWatch.delete(message.channel.id);
+
+      const result = await fetchMediaInfo(movieName);
+      if (result.error) {
+        await message.channel.send(`> **Auto-Info:** ${result.error}`);
+      } else {
+        await message.channel.send({ content: `> **Auto-Info for "${movieName}":**`, ...result });
+      }
+    }
+  }
+
+  // -- PRIORITY 2: Auto-Reaction Logic --
   if (settings.enabled && message.channel.id === settings.channelId && (!message.author.bot || message.webhookId)) {
     for (const emoji of settings.emojis) {
       try { await message.react(emoji); }
@@ -105,7 +96,7 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // --- Command Processing ---
+  // -- PRIORITY 3: Command Processing --
   if (message.author.bot || !message.content.startsWith('!!')) return;
   const args = message.content.trim().split(/\s+/);
   const command = args[0].toLowerCase();
