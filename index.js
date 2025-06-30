@@ -56,31 +56,36 @@ client.on(Events.ChannelCreate, async (channel) => {
 const processTicketEmbed = async (message) => {
   if (!ticketsToWatch.has(message.channel.id)) return;
   if (message.author.id === ticketsBotId && message.embeds.length > 0) {
-    const embed = message.embeds[0];
     
-    // ============================ THE FINAL FIX IS HERE ============================
-    // We now check if the field name *includes* our target strings, ignoring case.
-    const mediaNameField = embed.fields.find(field =>
-      field.name.toLowerCase().includes('movie name') ||
-      field.name.toLowerCase().includes('series name')
-    );
-    // ===========================================================================
-
-    if (mediaNameField && mediaNameField.value) {
-      const movieName = mediaNameField.value;
-      log(`SUCCESS: Found media name in #${message.channel.name}: "${movieName}". Processing...`);
-      ticketsToWatch.delete(message.channel.id);
-      const result = await fetchMediaInfo(movieName);
-      if (result.error) {
-        await message.channel.send(`> **Auto-Info:** ${result.error}`);
-      } else {
-        await message.channel.send({ content: `> **Auto-Info for "${movieName}":**`, ...result });
+    // ============================ THE REAL FIX IS HERE ============================
+    // Loop through ALL embeds in the message, not just the first one.
+    for (const embed of message.embeds) {
+      // Check if this specific embed has fields. The first one doesn't.
+      if (!embed.fields || embed.fields.length === 0) {
+        continue; // Skip to the next embed
       }
-    } else {
-      // BOMB-PROOF DEBUGGING: If it still fails, this will tell us exactly what field names it found.
-      const foundFieldNames = embed.fields.map(f => f.name).join(', ') || 'None';
-      log(`INFO: Saw embed in #${message.channel.name}, but couldn't find media field. Fields found: [${foundFieldNames}]`);
+
+      const mediaNameField = embed.fields.find(field =>
+        field.name.toLowerCase().includes('movie name') ||
+        field.name.toLowerCase().includes('series name')
+      );
+      
+      if (mediaNameField && mediaNameField.value) {
+        const movieName = mediaNameField.value;
+        log(`SUCCESS: Found media name in #${message.channel.name}: "${movieName}". Processing...`);
+        ticketsToWatch.delete(message.channel.id);
+        const result = await fetchMediaInfo(movieName);
+        if (result.error) {
+          await message.channel.send(`> **Auto-Info:** ${result.error}`);
+        } else {
+          await message.channel.send({ content: `> **Auto-Info for "${movieName}":**`, ...result });
+        }
+        // We found it and processed it, so we can stop the loop.
+        return;
+      }
     }
+    // ===========================================================================
+    log(`INFO: Saw embed from tickets.bot in #${message.channel.name}, but couldn't find media field in any of its embeds.`);
   }
 };
 
