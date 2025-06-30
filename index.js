@@ -53,30 +53,23 @@ client.on(Events.ChannelCreate, async (channel) => {
   }, 300000);
 });
 
-// This is a new, shared function to process the ticket embed.
 const processTicketEmbed = async (message) => {
-  // Defensive check: Is this a channel we should even be looking at?
-  if (!ticketsToWatch.has(message.channel.id)) {
-      // This log is for debugging. It shouldn't normally appear.
-      // log(`DEBUG: Saw message in #${message.channel.name}, but it's not on the watchlist.`);
-      return;
-  }
-  
-  // Is this the bot we are looking for, and does it have an embed?
+  if (!ticketsToWatch.has(message.channel.id)) return;
   if (message.author.id === ticketsBotId && message.embeds.length > 0) {
     const embed = message.embeds[0];
-    const mediaNameField = embed.fields.find(
-      field => field.name === 'Movie Name' || field.name === 'Series Name'
-    );
     
-    // Did we find the field with the movie/series name?
+    // ============================ THE FINAL FIX IS HERE ============================
+    // We now check if the field name *includes* our target strings, ignoring case.
+    const mediaNameField = embed.fields.find(field =>
+      field.name.toLowerCase().includes('movie name') ||
+      field.name.toLowerCase().includes('series name')
+    );
+    // ===========================================================================
+
     if (mediaNameField && mediaNameField.value) {
       const movieName = mediaNameField.value;
       log(`SUCCESS: Found media name in #${message.channel.name}: "${movieName}". Processing...`);
-      
-      // Found it. Remove from watchlist immediately to prevent double-processing.
       ticketsToWatch.delete(message.channel.id);
-
       const result = await fetchMediaInfo(movieName);
       if (result.error) {
         await message.channel.send(`> **Auto-Info:** ${result.error}`);
@@ -84,32 +77,24 @@ const processTicketEmbed = async (message) => {
         await message.channel.send({ content: `> **Auto-Info for "${movieName}":**`, ...result });
       }
     } else {
-      // This will log if we see the ticket bot's embed but it's not the final version yet.
-      log(`INFO: Saw embed from tickets.bot in #${message.channel.name}, but 'Movie Name' field was missing. Waiting for update...`);
+      // BOMB-PROOF DEBUGGING: If it still fails, this will tell us exactly what field names it found.
+      const foundFieldNames = embed.fields.map(f => f.name).join(', ') || 'None';
+      log(`INFO: Saw embed in #${message.channel.name}, but couldn't find media field. Fields found: [${foundFieldNames}]`);
     }
   }
 };
 
-// ============================ THE DEFINITIVE FIX ============================
-// LISTENER 1: For messages being created.
 client.on('messageCreate', (message) => processTicketEmbed(message));
-// LISTENER 2: For messages being edited (this is likely the one that will work).
 client.on('messageUpdate', (oldMessage, newMessage) => processTicketEmbed(newMessage));
-// =======================================================================
 
-// This is the original messageCreate handler, now just for our bot's own features.
 client.on('messageCreate', async (message) => {
   if (!settings || !message.guild) return;
-
-  // Auto-Reaction Logic
   if (settings.enabled && message.channel.id === settings.channelId && (!message.author.bot || message.webhookId)) {
     for (const emoji of settings.emojis) {
       try { await message.react(emoji); }
       catch (err) { log(`❌ Failed to react with ${emoji}. Error: ${err.message}`); }
     }
   }
-
-  // Command Processing
   if (message.author.bot || !message.content.startsWith('!!')) return;
   const args = message.content.trim().split(/\s+/);
   const command = args[0].toLowerCase();
