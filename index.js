@@ -32,32 +32,45 @@ client.once('ready', async () => {
   }
 });
 
-// All automated event handlers remain the same
+// All automated event handlers for forums and tickets remain the same
 client.on(Events.ThreadCreate, async (thread) => { /* ... */ });
 client.on(Events.ChannelCreate, async (channel) => { /* ... */ });
 client.on(Events.MessageCreate, (message) => { /* process tickets */ });
 client.on(Events.MessageUpdate, (oldMessage, newMessage) => { /* process tickets */ });
 
 
-// A single handler for commands and auto-reactions
+// ============================ THE FIX IS HERE ============================
+// A single, restructured handler for commands and auto-reactions
 client.on(Events.MessageCreate, async (message) => {
   if (!settings || !message.guild) return;
 
-  // Auto-reaction logic
-  if (settings.enabled && message.channel.id === settings.channelId && (!message.author.bot || message.webhookId)) {
+  // --- 1. Auto-Reaction Logic (This runs first for every message) ---
+  // This condition allows reactions on messages from non-bots OR from webhooks.
+  // We will now also allow it for messages from our own bot.
+  const isOurOwnBot = message.author.id === client.user.id;
+
+  if (
+    settings.enabled &&
+    message.channel.id === settings.channelId &&
+    (!message.author.bot || message.webhookId || isOurOwnBot)
+  ) {
     for (const emoji of settings.emojis) {
-      try { await message.react(emoji); }
-      catch (err) { log(`❌ Failed to react with ${emoji}. Error: ${err.message}`); }
+      try {
+        await message.react(emoji);
+      } catch (err) {
+        log(`❌ Failed to react with ${emoji}. Error: ${err.message}`);
+      }
     }
   }
 
-  // Command logic guard
+  // --- 2. Command Logic Guard ---
+  // Now, if the message was from a bot (any bot), we stop. We don't want to process commands from bots.
   if (message.author.bot || !message.content.startsWith('!!')) return;
   
   const args = message.content.trim().split(/\s+/);
   const command = args[0].toLowerCase();
 
-  // --- COMMAND ROUTER ---
+  // --- 3. Command Router ---
   if (message.member?.permissions.has('Administrator')) {
     if (command === '!!autoreact') {
       const handleAutoreact = require('./commands/autoreact');
@@ -68,12 +81,10 @@ client.on(Events.MessageCreate, async (message) => {
       const handleDM = require('./commands/dm');
       return await handleDM(message, args, client);
     }
-    // ================== NEW COMMAND ADDED HERE ==================
     if (command === '!!announce') {
-        const handleAnnounce = require('./commands/announce');
-        return await handleAnnounce(message);
+      const handleAnnounce = require('./commands/announce');
+      return await handleAnnounce(message);
     }
-    // ============================================================
   }
 
   // Global Commands
@@ -86,6 +97,7 @@ client.on(Events.MessageCreate, async (message) => {
     return await handleInfo(message, args);
   }
 });
+// =======================================================================
 
 client.login(process.env.TOKEN);
 
