@@ -16,52 +16,92 @@ const ticketsBotId = '1325579039888511056';
 const ticketsToWatch = new Set();
 
 client.once('ready', async () => {
-  // ... (Your startup logic is correct and remains unchanged) ...
+  try {
+    settings = await getSettings();
+    if (!settings) {
+      log('⚠️ No settings found in database. Creating default settings.');
+      settings = { enabled: false, channelId: null, emojis: ['🔥', '💯'] };
+      await saveSettings(settings);
+    }
+    initializeLogger(client);
+    if (monitoredForumChannels.length > 0) log(`Monitoring ${monitoredForumChannels.length} forum channel(s).`);
+    if (ticketCategoryId) log(`Monitoring ticket category ID: ${ticketCategoryId}`);
+    log(`✅ Bot logged in as ${client.user.tag}. Ready to go!`);
+  } catch (error) {
+    console.error('❌ CRITICAL ERROR ON STARTUP:', error);
+  }
 });
 
 client.on(Events.ThreadCreate, async (thread) => {
-  // ... (This logic is correct and remains unchanged) ...
+  if (!monitoredForumChannels.includes(thread.parentId)) return;
+  log(`New forum post in #${thread.parent.name} with title: "${thread.name}"`);
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  const result = await fetchMediaInfo(thread.name);
+  if (result.error) { await thread.send(result.error); }
+  else { await thread.send(result); }
 });
 
 client.on(Events.ChannelCreate, async (channel) => {
-  // ... (This logic is correct and remains unchanged) ...
+  if (!ticketCategoryId || channel.parentId !== ticketCategoryId || channel.type !== ChannelType.GuildText) return;
+  log(`New ticket channel #${channel.name} created. Adding to watchlist.`);
+  ticketsToWatch.add(channel.id);
+  setTimeout(() => {
+    if (ticketsToWatch.has(channel.id)) {
+      log(`Watchlist timeout for #${channel.name}. Removing.`);
+      ticketsToWatch.delete(channel.id);
+    }
+  }, 300000);
 });
 
 const processTicketEmbed = async (message) => {
-  // ... (This logic is correct and remains unchanged) ...
+  if (!ticketsToWatch.has(message.channel.id)) return;
+  if (message.author.id === ticketsBotId && message.embeds.length > 0) {
+    for (const embed of message.embeds) {
+      if (!embed.fields || embed.fields.length === 0) {
+        continue;
+      }
+      const mediaNameField = embed.fields.find(field =>
+        field.name.toLowerCase().includes('movie name') ||
+        field.name.toLowerCase().includes('series name')
+      );
+      if (mediaNameField && mediaNameField.value) {
+        const movieName = mediaNameField.value;
+        log(`SUCCESS: Found media name in #${message.channel.name}: "${movieName}". Processing...`);
+        ticketsToWatch.delete(message.channel.id);
+        const result = await fetchMediaInfo(movieName);
+        if (result.error) {
+          await message.channel.send(`> **Auto-Info:** ${result.error}`);
+        } else {
+          await message.channel.send({ content: `> **Auto-Info for "${movieName}":**`, ...result });
+        }
+        return;
+      }
+    }
+    log(`INFO: Saw embed from tickets.bot in #${message.channel.name}, but couldn't find media field in any of its embeds.`);
+  }
 };
 
-// First messageCreate handler for tickets
 client.on('messageCreate', (message) => processTicketEmbed(message));
 client.on('messageUpdate', (oldMessage, newMessage) => processTicketEmbed(newMessage));
 
-// Second messageCreate handler for reactions and commands
 client.on('messageCreate', async (message) => {
   if (!settings || !message.guild) return;
 
-  // ============================ THE FIX IS HERE ============================
-  // We add a check to see if the message is from our own bot.
-  const isOurOwnBot = message.author.id === client.user.id;
-
-  // We update the if condition to include our bot.
-  if (
-    settings.enabled &&
-    message.channel.id === settings.channelId &&
-    (!message.author.bot || message.webhookId || isOurOwnBot)
-  ) {
+  // Allow reactions from users, webhooks, and bots including itself
+  if (settings.enabled && message.channel.id === settings.channelId) {
     for (const emoji of settings.emojis) {
-      try { await message.react(emoji); }
-      catch (err) { log(`❌ Failed to react with ${emoji}. Error: ${err.message}`); }
+      try {
+        await message.react(emoji);
+      } catch (err) {
+        log(`❌ Failed to react with ${emoji}. Error: ${err.message}`);
+      }
     }
   }
-  // =======================================================================
 
-  // This is the command guard from your working code. It is untouched.
   if (message.author.bot || !message.content.startsWith('!!')) return;
   const args = message.content.trim().split(/\s+/);
   const command = args[0].toLowerCase();
 
-  // The command router remains the same.
   if (message.member?.permissions.has('Administrator')) {
     if (command === '!!autoreact') {
       const handleAutoreact = require('./commands/autoreact');
@@ -92,7 +132,6 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-// Login and server code remains the same.
 client.login(process.env.TOKEN);
 const app = express();
 app.get('/', (_req, res) => res.send('OK'));
