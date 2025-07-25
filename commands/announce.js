@@ -53,7 +53,7 @@ module.exports = async (message) => {
     const linkText = fetchedEmbedData.title.split(' (')[0];
 
     const finalEmbed = new EmbedBuilder()
-      .setColor('#5865F2')
+      .setColor('#5f0005')
       .setTitle(`🎬 ${fetchedEmbedData.title}`)
       .setURL(imdbUrl) // FIX: Link the title to the IMDb URL
       .setDescription(fetchedEmbedData.description)

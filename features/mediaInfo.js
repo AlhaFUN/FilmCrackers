@@ -55,7 +55,7 @@ async function fetchMediaInfo(query) {
     const director = details.credits?.crew.find(p => p.job === 'Director')?.name || 'N/A';
 
     const infoEmbed = new EmbedBuilder()
-      .setColor('#E91E63')
+      .setColor('#5f0005')
       .setTitle(`${title} (${releaseYear})`).setURL(imdbUrl)
       .setDescription(details.overview || 'No synopsis available.')
       .setThumbnail(details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null)
